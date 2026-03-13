@@ -1,0 +1,573 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Caller Verification – Decision Guide</title>
+<style>
+  :root{
+    --bg:#0f172a;            /* slate-900 */
+    --panel:#111827;         /* gray-900 */
+    --muted:#94a3b8;         /* slate-400 */
+    --text:#e5e7eb;          /* gray-200 */
+    --ok:#10b981;            /* emerald-500 */
+    --warn:#f59e0b;          /* amber-500 */
+    --err:#ef4444;           /* red-500 */
+    --brand:#22d3ee;         /* cyan-400 */
+  }
+  html, body{height:100%;}
+  body{
+    margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    color:var(--text); background:linear-gradient(180deg, #0b1224, #0f172a 35%, #0b1224);
+  }
+  header{padding:20px 16px; border-bottom:1px solid #1f2937; position:sticky; top:0; backdrop-filter: blur(6px); background: rgba(15,23,42,.8); z-index:2}
+  header h1{margin:0 0 4px; font-size:20px}
+  header p{margin:0; color:var(--muted); font-size:14px}
+  main{max-width:1100px; margin:0 auto; padding:24px 16px 80px}
+  .grid{display:grid; gap:16px}
+  @media(min-width:960px){
+    .grid{grid-template-columns: 1.2fr 1fr}
+  }
+  .card{background: #0b1020; border:1px solid #1f2937; border-radius:12px; padding:16px}
+  .card h2, .card h3{margin-top:0}
+  .section{border-top:1px dashed #273245; margin-top:10px; padding-top:12px}
+  fieldset{border:0; padding:0; margin:0}
+  legend{font-weight:600; margin-bottom:8px}
+  label{display:block; margin:8px 0;}
+  .inline > label{display:inline-flex; align-items:center; gap:8px; margin-right:16px}
+  select, input[type="text"], input[type="number"], .chip{
+    background:#0a0f1e; color:var(--text); border:1px solid #1f2937; border-radius:8px; padding:8px 10px; outline:none
+  }
+  .muted{color:var(--muted)}
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{cursor:pointer; user-select:none}
+  .chip input{accent-color: var(--brand)}
+  .two-col{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
+  .note{font-size:13px; color:var(--muted)}
+  .status{border-radius:12px; padding:16px; border:1px solid #1f2937; background:#0a0f1e}
+  .status h3{margin:0 0 8px}
+  .pill{display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; letter-spacing:.4px;}
+  .pill.pass{background: color-mix(in oklab, var(--ok) 20%, transparent); color:var(--ok); border:1px solid color-mix(in oklab, var(--ok) 55%, #000)}
+  .pill.more{background: color-mix(in oklab, var(--warn) 20%, transparent); color:var(--warn); border:1px solid color-mix(in oklab, var(--warn) 50%, #000)}
+  .pill.fail{background: color-mix(in oklab, var(--err) 20%, transparent); color:var(--err); border:1px solid color-mix(in oklab, var(--err) 50%, #000)}
+  .list{margin:.25rem 0 .75rem 1.1rem}
+  .kbd{background:#0b1020; border:1px solid #1f2937; padding:2px 6px; border-radius:6px}
+  .btns{display:flex; gap:8px; margin-top:12px}
+  button{background:#0a0f1e; color:var(--text); border:1px solid #243047; padding:8px 12px; border-radius:8px; cursor:pointer}
+  button:hover{border-color:#334155}
+  details{border:1px solid #1f2937; border-radius:8px; padding:8px 10px; background:#0b1020}
+  summary{cursor:pointer; font-weight:600}
+  .foot{color:var(--muted); font-size:12px; margin-top:8px}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Caller Verification – Decision Guide</h1>
+    <p class="muted">Interactive helper for <span class="kbd">Voice Match</span> and <span class="kbd">Standard (Voice Mismatch)</span>.</p>
+  </header>
+
+  <main class="grid" id="app">
+    <section class="card">
+      <h2>1) Choose Method</h2>
+      <div class="inline" role="group" aria-label="Verification method">
+        <label><input type="radio" name="method" value="voiceMatch"> Voice Match</label>
+        <label><input type="radio" name="method" value="standard"> Standard (Voice Mismatch)</label>
+      </div>
+
+      <div class="section">
+        <h3>2) Base Checks</h3>
+        <div class="one-col">
+          <label>IVR Status:
+            <select id="ivr">
+              <option value="unknown">Select…</option>
+              <option value="verified">Verified</option>
+              <option value="unverified">Unverified</option>
+            </select>
+          </label>
+        </div>
+        <div id="acctBlock" style="display:none" class="two-col">
+          <label>Account number provided correctly?
+            <select id="acct">
+              <option value="unknown">Select…</option>
+              <option value="match">Matched/Correct</option>
+              <option value="miss">Missed/Incorrect</option>
+            </select>
+          </label>
+          <label>Last 4 of SSN provided correctly?
+            <select id="ssn4">
+              <option value="unknown">Select…</option>
+              <option value="match">Matched/Correct</option>
+              <option value="miss">Missed/Incorrect</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="two-col">
+          <label>Security Code Available?
+            <select id="secAvail">
+              <option value="unknown">Select…</option>
+              <option value="na">Not applicable / none on file</option>
+              <option value="yes">Yes</option>
+            </select>
+          </label>
+          <!-- Fraud alert/ID theft control (next to/under Security Code) -->
+          <label id="fraudRow" style="display:none">Fraud alert/ID theft?
+            <select id="fraudFlag">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="secCodeRow" style="display:none" class="one-col">
+          <label>Security Code provided matches?
+            <select id="secMatch">
+              <option value="unknown">Select…</option>
+              <option value="yes">Yes</option>
+              <option value="no">No (miss)</option>
+            </select>
+          </label>
+          <div class="note">Per policy: a miss for the security code (if available) is an automatic <b>failed verification</b>.</div>
+        </div>
+
+        <div id="otpBlock" class="two-col">
+          <label>OTP status
+            <select id="otp">
+               <option value="notUsed">Not used</option>
+              <option value="verified">Verified</option>
+              <option value="miss">Missed / Not obtained</option>
+            </select>
+          </label>
+          <label id="manualBlock" style="display:none">Manual alternative used (Date of Birth or mother’s maiden name) for missed OTP?
+            <select id="manual">
+              <option value="unknown">Select…</option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </label>
+        </div>
+        <div class="note">General rule: only <b>one</b> miss of <i>account number</i>, <i>last 4 of SSN</i>, or <i>OTP</i> may be replaced by an Additional Verifier. <b>Two</b> misses among those = failed verification.</div>
+      </div>
+
+      <div class="section" id="scenariosVM">
+        <h3>3) Scenarios (Voice Match)</h3>
+        <p class="note">If any scenario below applies, it requires <b>One-Time Passcode</b> <i>or</i> <b>one Additional Verifier</b> (per your Voice Match guide).</p>
+        <div class="chips">
+          <label class="chip"><input type="checkbox" class="vmScenario"> Check Order – Address Change within 30 Day</label>
+          <label class="chip"><input type="checkbox" class="vmScenario"> Debit Card – Expedited Request</label>
+          <label class="chip"><input type="checkbox" class="vmScenario"> Debit Card – Address Change within 30 Days</label>
+          <label class="chip"><input type="checkbox" class="vmScenario"> Maintenance – Phone Number Change/Removal</label>
+          <label class="chip"><input type="checkbox" class="vmScenario"> Online Banking – Remove Lockout/Unlock</label>
+          <label class="chip"><input type="checkbox" class="vmScenario"> Zelle – Maintenance</label>
+        </div>
+      </div>
+
+      <div class="section" id="scenariosSTD" style="display:none">
+        <h3>3) Scenarios (Standard Verification)</h3>
+        <p class="note">For any scenario below, obtain <b>one (1) Additional Verifier</b>.</p>
+        <div class="chips" id="stdList">
+          <label class="chip"><input type="checkbox" class="stdScenario"> Check Order – Address Change within 30 Days</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Debit Card – Expedited Request</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Debit Card – Limit Increase</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Debit Card – Access Code Count Reset</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Debit Card – Address Change within 30 Days</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> HELOC – Inquiries</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> IVR – Access Code Reset</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Maintenance – Mailing Address Change</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Maintenance – Email Address Change</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Maintenance – Phone Number Change/Removal</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Maintenance – Account Status Change</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> OLB – Establish/Reset Challenge Questions</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> OLB – Remove Lockout/Unlock</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Tokenization – Mobile Wallet</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Transfers – Internal Account</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Funds Transfers</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Travel Notes – Add/Remove</label>
+          <label class="chip"><input type="checkbox" class="stdScenario"> Zelle – Maintenance</label>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>4) Additional Verification Options</h3>
+        <p class="note">Choose from the policy-approved list. For most cases you will need <b>one (1)</b> in total. If using Voice Match scenarios, either <b>OTP</b> or <b>one Additional Verifier</b> is acceptable.</p>
+        <div class="chips">
+          <label class="chip"><input type="checkbox" class="addl"> Driver’s license, state identification, or passport number (expiration date not required)</label>
+          <label class="chip"><input type="checkbox" class="addl"> Amount of last deposit (within $100)</label>
+          <label class="chip"><input type="checkbox" class="addl"> Review of recent transaction history since last statement</label>
+          <label class="chip"><input type="checkbox" class="addl"> Company name and date associated with a recurring debit or credit</label>
+          <label class="chip"><input type="checkbox" class="addl"> Company name and amount (within $100) associated with a recurring debit or credit</label>
+          <label class="chip"><input type="checkbox" class="addl"> Last four digits of the ATM/Debit card number (except with Travel Notes/Debit Card scenarios)</label>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <h2>Decision</h2>
+      <div class="status" id="statusBox">
+        <h3><span class="pill more" id="statusPill">NEED INPUT</span></h3>
+        <div id="explain"></div>
+      </div>
+
+      <details class="section">
+        <summary>CEC Verification Policy text</summary>
+        <div class="section">
+          <h4>Voice Biometric Verification – Voice Match</h4>
+          <ol class="list">
+            <li>First and Last Name</li>
+            <li>If IVR Unverified, obtain account number AND last four digits of SSN.</li>
+            <li>Security Code, if applicable</li>
+            <li>The following scenarios require <b>One-Time Passcode</b> or one <b>Additional Verifier</b>:
+              <ul class="list">
+                <li>Check Order – Address Change within 30 Day</li>
+                <li>Debit Card – Expedited Request</li>
+                <li>Debit Card – Address Change within 30 Days</li>
+                <li>Maintenance – Phone Number Change/Removal</li>
+                <li>Online Banking – Remove Lockout/Unlock</li>
+                <li>Zelle – Maintenance</li>
+              </ul>
+            </li>
+          </ol>
+        </div>
+        <div class="section">
+          <h4>Standard Verification</h4>
+          <ol class="list">
+            <li>First and last name.</li>
+            <li>If IVR Unverified, obtain account number AND last four digits of SSN.</li>
+            <li>Security Code, if applicable.</li>
+            <li>One-Time Passcode (OTP).
+              <ol class="list">
+                <li>If OTP is Missed or Not Obtained:
+                  <ol class="list">
+                    <li>Click the Manual Button and select Date of Birth or mother’s maiden name</li>
+                  </ol>
+                </li>
+              </ol>
+            </li>
+            <li>Obtain one Additional Verifier for any of the following scenarios:
+              <ol class="list" type="a">
+                <li>Fraud alert/ID theft and no security code.</li>
+                <li>Any one miss of either account number, last 4 of SSN, or OTP</li>
+                <li>Only one miss is allowed to be replaced by an Additional Verifier per interaction.</li>
+              </ol>
+            </li>
+          </ol>
+          <p class="note">After proper verification you may offer to add a security code as an added protection for the client.</p>
+        </div>
+        <div class="section">
+          <h4>Additional Verification</h4>
+          <p>When using standard verification where OTP is not successfully verified, and in certain scenarios, additional verification is required. Select the required number of additional verifiers from the additional verification options below.</p>
+          <p><b>Additional Verifiers Required:</b> One (1)</p>
+          <h5>Scenarios:</h5>
+          <ul class="list">
+            <li>Check Order – Address Change within 30 Days</li>
+            <li>Debit Card – Expedited Request</li>
+            <li>Debit Card – Limit Increase</li>
+            <li>Debit Card – Access Code Count Reset</li>
+            <li>Debit Card – Address Change within 30 Days</li>
+            <li>HELOC – Inquiries</li>
+            <li>IVR – Access Code Reset</li>
+            <li>Maintenance – Mailing Address Change</li>
+            <li>Maintenance – Email Address Change</li>
+            <li>Maintenance – Phone Number Change/Removal</li>
+            <li>Maintenance – Account Status Change</li>
+            <li>OLB – Establish/Reset Challenge Questions</li>
+            <li>OLB – Remove Lockout/Unlock</li>
+            <li>Tokenization – Mobile Wallet</li>
+            <li>Transfers – Internal Account</li>
+            <li>Funds Transfers</li>
+            <li>Travel Notes – Add/Remove</li>
+            <li>Zelle – Maintenance</li>
+          </ul>
+          <h5>Additional Verification Options:</h5>
+          <ul class="list">
+            <li>Driver’s license, state identification, or passport number (expiration date not required).</li>
+            <li>Amount of last deposit (within $100).</li>
+            <li>Review of recent transaction history since last statement.</li>
+            <li>Company name and date associated with a recurring debit or credit.</li>
+            <li>Company name and amount (within $100) associated with a recurring debit or credit.</li>
+            <li>Last four digits of the ATM/Debit card number (except with Travel Notes/Debit Card scenarios).</li>
+          </ul>
+        </div>
+      </details>
+
+      <div class="btns">
+        <button id="resetBtn" type="button">Reset</button>
+        <button id="printBtn" type="button">Print</button>
+      </div>
+      <div class="foot">This tool does not store any data. Use professional judgment and follow supervisor guidance for exceptions.</div>
+    </aside>
+  </main>
+
+<script>
+(function(){
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+  const methodRadios = $$('input[name="method"]');
+  const ivr = $('#ivr');
+  const secAvail = $('#secAvail');
+  const secMatch = $('#secMatch');
+  const secCodeRow = $('#secCodeRow');
+  const acctBlock = $('#acctBlock');
+  const otpBlock = $('#otpBlock');
+  const otp = $('#otp');
+  const manualBlock = $('#manualBlock');
+  const manual = $('#manual');
+  const scenariosVM = $('#scenariosVM');
+  const scenariosSTD = $('#scenariosSTD');
+  const statusPill = $('#statusPill');
+  const explain = $('#explain');
+  const fraudRow = $('#fraudRow');
+  const fraudFlag = $('#fraudFlag');
+
+  function currentMethod(){
+  const picked = methodRadios.find(r=>r.checked)?.value;
+  return picked || null; // null means "no method chosen yet"
+  }
+
+  function getCounts(){
+    const method = currentMethod();
+    // Determine required fields
+    const ivrUnverified = ivr.value === 'unverified';
+
+    // Security Code
+    const securityAvailable = secAvail.value === 'yes';
+    const securityMiss = securityAvailable && secMatch.value === 'no';
+
+    // Account + SSN (required only if IVR Unverified)
+    let misses = 0;
+    let details = [];
+
+    if (ivrUnverified){
+      if ($('#acct').value === 'miss'){ misses++; details.push('Miss: Account number'); }
+      if ($('#ssn4').value === 'miss'){ misses++; details.push('Miss: Last 4 of SSN'); }
+    }
+
+    // OTP handling
+    let otpStatus = otp.value; // notUsed | verified | miss
+    if (method === 'standard'){
+      // Standard requires OTP; if missed:
+      if (otpStatus === 'miss'){
+        // If Manual alternative was NOT used, count as TWO misses (Step rule)
+        if (manual?.value === 'no'){
+          misses += 2;
+          details.push('Miss: OTP (manual alternative not used → counts as two misses)');
+        } else {
+          // Manual alternative used -> counts as one miss (existing behavior)
+          misses++;
+          details.push('Miss: OTP (manual alternative used)');
+        }
+      }
+    } else {
+      // Voice Match: OTP only counts as a miss if attempted and missed
+      if (otpStatus === 'miss'){ misses++; details.push('Miss: OTP (attempted)'); }
+    }
+
+    // Scenario requirements
+    const vmScenarioActive = $$('.vmScenario').some(c=>c.checked);
+    const stdScenarioActive = $$('.stdScenario').some(c=>c.checked);
+
+    // Fraud alert/ID theft requires one additional verifier ONLY if no security code on file
+    const fraudNeedsAddl = (fraudFlag?.value === 'yes') && (secAvail.value !== 'yes');
+
+    // Additional verifiers selected
+    const addlSelected = $$('.addl').filter(c=>c.checked).length;
+
+    // Additional required logic
+    let additionalRequired = 0;
+    if (method === 'standard'){
+      // Base components
+      const needForScenario = stdScenarioActive ? 1 : 0;   // long list item(s)
+      const needForOneMiss = (misses === 1) ? 1 : 0;       // exactly one miss among acct/SSN/OTP
+
+      if (fraudNeedsAddl){
+        // Step 5: Fraud alert/ID theft + no security code => exactly ONE Additional Verifier total
+        additionalRequired = 1;
+      } else {
+        // Normal rule: miss + (regular) scenario can total up to 2
+        additionalRequired = Math.min(2, needForOneMiss + needForScenario);
+      }
+    } else {
+      // Voice Match: unchanged
+      const needBecauseScenario = vmScenarioActive && !(otpStatus === 'verified') ? 1 : 0;
+      const needForOneMiss = (misses === 1) ? 1 : 0;
+      additionalRequired = Math.max(needBecauseScenario, needForOneMiss);
+    }
+
+    return {
+      method, ivrUnverified, securityAvailable, securityMiss, misses, details,
+      vmScenarioActive, stdScenarioActive, addlSelected, additionalRequired,
+      otpStatus, fraudNeedsAddl
+    };
+  }
+
+  function refreshUI(){
+    const method = currentMethod();
+    // Toggle blocks
+    scenariosVM.style.display = (method === 'voiceMatch') ? '' : 'none';
+    scenariosSTD.style.display = (method === 'standard') ? '' : 'none';
+    acctBlock.style.display = (ivr.value === 'unverified') ? '' : 'none';
+    secCodeRow.style.display = (secAvail.value === 'yes') ? '' : 'none';
+    // Show Fraud control only when no security code is on file
+    fraudRow.style.display = (secAvail.value !== 'yes') ? '' : 'none';
+    if (secAvail.value === 'yes') { fraudFlag.value = 'no'; } // reset when code is on file
+
+    // OTP block options
+    if (method === 'standard'){
+      // Do not auto-set OTP; require explicit choice
+      manualBlock.style.display = (otp.value === 'miss') ? '' : 'none';
+    } else {
+      manualBlock.style.display = 'none';
+    }
+
+    // Compute decision
+    const ctx = getCounts();
+
+    // If no method chosen yet: show prompt and stop
+    if (!currentMethod()){
+      statusPill.className = 'pill more';
+      statusPill.textContent = 'NEED INPUT';
+      explain.innerHTML = '<div>• Please select a <b>verification method</b> to begin.</div>';
+      // Hide scenario blocks until a method is chosen
+      scenariosVM.style.display = 'none';
+      scenariosSTD.style.display = 'none';
+      return;
+    }
+
+    // Require explicit selections for base checks before deciding
+    const needMore =
+      (ivr.value === 'unknown') ||
+      (secAvail.value === 'unknown') ||
+      (
+        currentMethod() === 'standard' &&
+        (
+          otp.value === 'notUsed' ||                        // NEW: Standard requires OTP; notUsed => need input
+          (otp.value === 'miss' && manual.value === 'unknown')
+        )
+      );
+
+    if (needMore){
+      statusPill.className = 'pill more';
+      statusPill.textContent = 'NEED INPUT';
+      const missing = [];
+	if (ivr.value === 'unknown') missing.push('IVR Status');
+	if (secAvail.value === 'unknown') missing.push('Security Code Available?');
+	if (currentMethod() === 'standard' && otp.value === 'notUsed') missing.push('OTP (Verified or Miss)');
+	if (currentMethod() === 'standard' && otp.value === 'miss' && manual.value === 'unknown') missing.push('Manual alternative (for missed OTP)');
+	
+	explain.innerHTML = missing.length
+	  ? `<div>• Please complete: <b>${missing.join(', ')}</b>.</div>`
+	  : '<div>• Please complete the <b>Base Checks</b> on the left.</div>';
+      // Keep sections visible according to currently selected method
+      scenariosVM.style.display = (currentMethod() === 'voiceMatch') ? '' : 'none';
+      scenariosSTD.style.display = (currentMethod() === 'standard') ? '' : 'none';
+      return;
+    }
+
+    // Build explanation
+    const lines = [];
+
+    // Immediate fails
+    if (ctx.securityMiss){ lines.push('Security code mismatch ⇒ <b>automatic fail</b>.'); }
+    if (ctx.misses >= 2){ lines.push('Two or more misses among account number / last 4 of SSN / OTP ⇒ <b>automatic fail</b>.'); }
+    if (ctx.method === 'standard' && otp.value === 'miss' && manual.value === 'no'){ lines.push('OTP missed and no manual alternative used ⇒ counts as <b>two misses</b> (fail).'); }
+
+    // Requirements
+    if (!ctx.securityMiss && ctx.misses < 2){
+      if (ctx.method === 'standard'){
+        if (ctx.stdScenarioActive){ lines.push('Standard scenario selected ⇒ need <b>one (1) Additional Verifier</b>.'); }
+        if (ctx.misses === 1){ lines.push('Exactly one miss detected ⇒ may be replaced by <b>one (1) Additional Verifier</b>.'); }
+        if (ctx.fraudNeedsAddl){
+          lines.push('Fraud alert/ID theft with <b>no security code</b> ⇒ need <b>one (1) Additional Verifier</b> (Step 5).');
+        }
+        if (ctx.fraudNeedsAddl && ctx.misses === 1){
+          lines.push('Step 5 override: even with one miss, total requirement remains <b>one (1)</b> Additional Verifier due to fraud.');
+        }
+        if (ctx.additionalRequired > 0){
+          const remaining = Math.max(0, ctx.additionalRequired - ctx.addlSelected);
+          if (remaining > 0){ lines.push(`You still need <b>${remaining}</b> Additional Verifier(s).`); }
+        }
+      } else {
+        if (ctx.vmScenarioActive){
+          if (ctx.otpStatus === 'verified'){
+            lines.push('Voice Match scenario covered with <b>OTP verified</b>.');
+          } else {
+            lines.push('Voice Match scenario selected ⇒ need <b>OTP</b> <i>or</i> <b>one (1) Additional Verifier</b>.');
+            const remaining = Math.max(0, ctx.additionalRequired - ctx.addlSelected);
+            if (remaining > 0){ lines.push(`You still need <b>${remaining}</b> Additional Verifier.`); }
+          }
+        }
+        if (ctx.misses === 1){ lines.push('Exactly one miss detected ⇒ may be replaced by <b>one (1) Additional Verifier</b>.'); }
+      }
+    }
+
+    // Status pill
+    let state = 'more';
+    let label = 'NEED INPUT';
+
+    if (ctx.securityMiss || ctx.misses >= 2){
+      state = 'fail'; label = 'FAILED VERIFICATION';
+    } else {
+      // Determine pass
+      let pass = false;
+      if (ctx.method === 'standard'){
+        // Must satisfy additional requirement count
+        pass = (ctx.additionalRequired === 0) || (ctx.addlSelected >= ctx.additionalRequired);
+      } else {
+        // Voice Match: if scenario active, either OTP verified or additionalSelected>=1; plus handle one-miss rule if applicable
+        const scenarioSatisfied = (!ctx.vmScenarioActive) || (ctx.otpStatus === 'verified') || (ctx.addlSelected >= 1);
+        const oneMissSatisfied = (ctx.misses === 0) || (ctx.addlSelected >= 1) || (ctx.otpStatus === 'verified');
+        pass = scenarioSatisfied && oneMissSatisfied;
+      }
+
+      if (pass){ state = 'pass'; label = 'VERIFICATION PASSED'; }
+      else { state = 'more'; label = 'NEED MORE INFORMATION'; }
+    }
+
+    statusPill.className = 'pill ' + state;
+    statusPill.textContent = label;
+
+    explain.innerHTML = lines.map(l=>`<div>• ${l}</div>`).join('') || '<span class="muted">Complete the inputs on the left to see guidance.</span>';
+  }
+
+  // Wire events
+  [...methodRadios, ivr, secAvail, secMatch, otp, manual, fraudFlag].forEach(el=>{
+    el.addEventListener('change', refreshUI);
+  });
+  $$('#acct, #ssn4, .vmScenario, .stdScenario, .addl').forEach(el=>{
+    el.addEventListener('change', refreshUI);
+  });
+
+  $('#resetBtn').addEventListener('click', ()=>{
+    document.querySelector('form')?.reset();
+
+    // Uncheck method radios (no method selected)
+    methodRadios.forEach(r => r.checked = false);
+
+    // Uncheck all checkboxes
+    $$('.vmScenario, .stdScenario, .addl').forEach(c=>{ c.checked = false; });
+
+    // Reset selects to "Select…" (unknown)
+    ivr.value = 'unknown';
+    secAvail.value = 'unknown';
+    secMatch.value = 'unknown';
+    $('#acct').value = 'unknown';
+    $('#ssn4').value = 'unknown';
+    otp.value = 'notUsed';
+    manual.value = 'unknown';
+
+    // Keep your existing fraud resets
+    if (typeof fraudFlag !== 'undefined' && fraudFlag) fraudFlag.value = 'no';
+    if (typeof fraudRow  !== 'undefined' && fraudRow)  fraudRow.style.display = (secAvail.value !== 'yes') ? '' : 'none';
+
+    refreshUI();
+  });
+  $('#printBtn').addEventListener('click', ()=>window.print());
+
+  // Initial paint
+  refreshUI();
+})();
+</script>
+</body>
+</html>
