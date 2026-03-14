@@ -210,7 +210,7 @@
       </div>
 
       <details class="section">
-        <summary>CEC Verification Policy text</summary>
+        <summary>CEC Verification Policy</summary>
         <div class="section">
           <h4>Voice Biometric Verification – Voice Match</h4>
           <ol class="list">
@@ -435,33 +435,54 @@
       return;
     }
 
-    // Require explicit selections for base checks before deciding
+    // Block decision until required base checks are chosen
     const needMore =
       (ivr.value === 'unknown') ||
       (secAvail.value === 'unknown') ||
       (
         currentMethod() === 'standard' &&
         (
-          otp.value === 'notUsed' ||                        // NEW: Standard requires OTP; notUsed => need input
+          otp.value === 'notUsed' ||
           (otp.value === 'miss' && manual.value === 'unknown')
         )
-      );
+      ) ||
+      (
+        // NEW: If IVR is Unverified, require explicit choices for Account and SSN
+        ivr.value === 'unverified' &&
+        (
+          document.querySelector('#acct').value === 'unknown' ||
+          document.querySelector('#ssn4').value === 'unknown'
+        )
+      ); // NEW
 
     if (needMore){
       statusPill.className = 'pill more';
       statusPill.textContent = 'NEED INPUT';
+
       const missing = [];
-	if (ivr.value === 'unknown') missing.push('IVR Status');
-	if (secAvail.value === 'unknown') missing.push('Security Code Available?');
-	if (currentMethod() === 'standard' && otp.value === 'notUsed') missing.push('OTP (Verified or Miss)');
-	if (currentMethod() === 'standard' && otp.value === 'miss' && manual.value === 'unknown') missing.push('Manual alternative (for missed OTP)');
-	
-	explain.innerHTML = missing.length
-	  ? `<div>• Please complete: <b>${missing.join(', ')}</b>.</div>`
-	  : '<div>• Please complete the <b>Base Checks</b> on the left.</div>';
-      // Keep sections visible according to currently selected method
-      scenariosVM.style.display = (currentMethod() === 'voiceMatch') ? '' : 'none';
-      scenariosSTD.style.display = (currentMethod() === 'standard') ? '' : 'none';
+      if (ivr.value === 'unknown') missing.push('IVR Status');
+      if (secAvail.value === 'unknown') missing.push('Security Code Available?');
+
+      // If Standard and OTP isn't chosen properly
+      if (currentMethod() === 'standard' && otp.value === 'notUsed') missing.push('OTP (Verified or Miss)');
+      if (currentMethod() === 'standard' && otp.value === 'miss' && manual.value === 'unknown') {
+        missing.push('Manual alternative (for missed OTP)');
+      }
+
+      // NEW: If IVR is Unverified, require Account & SSN selections
+      if (ivr.value === 'unverified' && document.querySelector('#acct').value === 'unknown'){
+        missing.push('Account number result');
+      }
+      if (ivr.value === 'unverified' && document.querySelector('#ssn4').value === 'unknown'){
+        missing.push('Last 4 of SSN result');
+      }
+
+      explain.innerHTML = missing.length
+        ? `<div>• Please complete: <b>${missing.join(', ')}</b>.</div>`
+        : '<div>• Please complete the <b>Base Checks</b> on the left.</div>';
+
+      // keep your existing scenario show/hide and return
+      // scenariosVM/scenariosSTD visibility lines here (unchanged)...
       return;
     }
 
