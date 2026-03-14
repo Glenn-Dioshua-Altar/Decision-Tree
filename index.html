@@ -192,12 +192,59 @@
         <h3>4) Additional Verification Options</h3>
         <p class="note">Choose from the policy-approved list. For most cases you will need <b>one (1)</b> in total. If using Voice Match scenarios, either <b>OTP</b> or <b>one Additional Verifier</b> is acceptable.</p>
         <div class="chips">
-          <label class="chip"><input type="checkbox" class="addl"> Driver’s license, state identification, or passport number (expiration date not required)</label>
-          <label class="chip"><input type="checkbox" class="addl"> Amount of last deposit (within $100)</label>
-          <label class="chip"><input type="checkbox" class="addl"> Review of recent transaction history since last statement</label>
-          <label class="chip"><input type="checkbox" class="addl"> Company name and date associated with a recurring debit or credit</label>
-          <label class="chip"><input type="checkbox" class="addl"> Company name and amount (within $100) associated with a recurring debit or credit</label>
-          <label class="chip"><input type="checkbox" class="addl"> Last four digits of the ATM/Debit card number (except with Travel Notes/Debit Card scenarios)</label>
+          <label class="chip">
+            <span>Driver’s license, state identification, or passport number (expiration date not required)</span>
+            <select class="addlChoice">
+              <option value="unused">Not used</option>
+              <option value="correct">Correct</option>
+              <option value="incorrect">Incorrect</option>
+            </select>
+          </label>
+
+          <label class="chip">
+            <span>Amount of last deposit (within $100)</span>
+            <select class="addlChoice">
+              <option value="unused">Not used</option>
+              <option value="correct">Correct</option>
+              <option value="incorrect">Incorrect</option>
+            </select>
+          </label>
+
+          <label class="chip">
+            <span>Review of recent transaction history since last statement</span>
+            <select class="addlChoice">
+              <option value="unused">Not used</option>
+              <option value="correct">Correct</option>
+              <option value="incorrect">Incorrect</option>
+            </select>
+          </label>
+
+          <label class="chip">
+            <span>Company name and date associated with a recurring debit or credit</span>
+            <select class="addlChoice">
+              <option value="unused">Not used</option>
+              <option value="correct">Correct</option>
+              <option value="incorrect">Incorrect</option>
+            </select>
+          </label>
+
+          <label class="chip">
+            <span>Company name and amount (within $100) associated with a recurring debit or credit</span>
+            <select class="addlChoice">
+              <option value="unused">Not used</option>
+              <option value="correct">Correct</option>
+              <option value="incorrect">Incorrect</option>
+            </select>
+          </label>
+
+          <label class="chip">
+            <span>Last four digits of the ATM/Debit card number (except with Travel Notes/Debit Card scenarios)</span>
+            <select class="addlChoice">
+              <option value="unused">Not used</option>
+              <option value="correct">Correct</option>
+              <option value="incorrect">Incorrect</option>
+            </select>
+          </label>
         </div>
       </div>
     </section>
@@ -336,12 +383,13 @@
     const securityMiss = securityAvailable && secMatch.value === 'no';
 
     // Account + SSN (required only if IVR Unverified)
-    let misses = 0;
+    let baseMisses = 0;   // ONLY acct/SSN/OTP contribute here
+    let misses = 0;       // TOTAL = baseMisses + incorrect addl
     let details = [];
 
     if (ivrUnverified){
-      if ($('#acct').value === 'miss'){ misses++; details.push('Miss: Account number'); }
-      if ($('#ssn4').value === 'miss'){ misses++; details.push('Miss: Last 4 of SSN'); }
+      if ($('#acct').value === 'miss'){ baseMisses++; details.push('Miss: Account number'); }
+      if ($('#ssn4').value === 'miss'){ baseMisses++; details.push('Miss: Last 4 of SSN'); }
     }
 
     // OTP handling
@@ -349,19 +397,17 @@
     if (method === 'standard'){
       // Standard requires OTP; if missed:
       if (otpStatus === 'miss'){
-        // If Manual alternative was NOT used, count as TWO misses (Step rule)
         if (manual?.value === 'no'){
-          misses += 2;
+          baseMisses += 2;
           details.push('Miss: OTP (manual alternative not used → counts as two misses)');
         } else {
-          // Manual alternative used -> counts as one miss (existing behavior)
-          misses++;
+          baseMisses++;
           details.push('Miss: OTP (manual alternative used)');
         }
       }
     } else {
       // Voice Match: OTP only counts as a miss if attempted and missed
-      if (otpStatus === 'miss'){ misses++; details.push('Miss: OTP (attempted)'); }
+      if (otpStatus === 'miss'){ baseMisses++; details.push('Miss: OTP (attempted)'); }
     }
 
     // Scenario requirements
@@ -371,41 +417,53 @@
     // Fraud alert/ID theft requires one additional verifier ONLY if no security code on file
     const fraudNeedsAddl = (fraudFlag?.value === 'yes') && (secAvail.value !== 'yes');
 
-    // Additional verifiers selected
-    const addlSelected = $$('.addl').filter(c=>c.checked).length;
+    // Additional verifiers: count CORRECT vs INCORRECT answers
+    const addlCorrect   = $$('.addlChoice').filter(s => s.value === 'correct').length;
+    const addlIncorrect = $$('.addlChoice').filter(s => s.value === 'incorrect').length;
+    misses = baseMisses + addlIncorrect; // total misses now includes incorrect addl
+    if (addlIncorrect > 0){
+      details.push(`Miss: Additional Verifier incorrect (x${addlIncorrect})`);
+    }
 
     // Additional required logic
     let additionalRequired = 0;
     if (method === 'standard'){
-      // Base components
-      let needForScenario = stdScenarioActive ? 1 : 0;    // long-list scenario(s)
-      let needForMiss     = (misses === 1) ? 1 : 0;       // exactly one miss among acct/SSN/OTP
-      let needForFraud    = fraudNeedsAddl ? 1 : 0;       // fraud alert + no security code
+      // Base components (use baseMisses only)
+      let needForScenario = stdScenarioActive ? 1 : 0;       // long-list scenario(s)
+      let needForMissBase = (baseMisses === 1) ? 1 : 0;      // exactly one BASE miss (acct/SSN/OTP)
+      let needForFraud    = fraudNeedsAddl ? 1 : 0;          // fraud + no sec code
 
-      // SPECIAL RULE (Step 5): If fraud + one miss are both present, they count as ONE total.
-      // We "collapse" the pair into a single slot, then add any scenario separately.
-      if (needForFraud && needForMiss){
-        const combinedMissFraud = 1;   // collapsed pair
-        needForFraud = 0;              // consumed by collapse
-        needForMiss  = 0;              // consumed by collapse
-        additionalRequired = Math.min(2, combinedMissFraud + needForScenario);
+      // SPECIAL RULE: fraud + one BASE miss collapse to one slot
+      if (needForFraud && needForMissBase){
+        const combined = 1; // collapsed pair
+        additionalRequired = Math.min(2, combined + needForScenario);
       } else {
-        // Normal sum with cap 2 (e.g., fraud + scenario = 2; miss + scenario = 2; fraud alone = 1)
-        additionalRequired = Math.min(2, needForScenario + needForMiss + needForFraud);
+        // Normal sum with cap 2; incorrect addl does NOT add to requirement
+        additionalRequired = Math.min(2, needForScenario + needForMissBase + needForFraud);
       }
     } else {
-      // Voice Match: unchanged
-      const needBecauseScenario = vmScenarioActive && !(otpStatus === 'verified') ? 1 : 0;
-      const needForOneMiss = (misses === 1) ? 1 : 0;
+      // Voice Match — OTP-first:
+      // If a VM scenario is active:
+      // - OTP verified  => 0 from scenario
+      // - OTP missed    => requires 1 AV
+      // - OTP not used  => 0 here, but NEED INPUT guard will force an OTP attempt
+      let needBecauseScenario = 0;
+      if (vmScenarioActive) {
+        if (otpStatus === 'verified')        needBecauseScenario = 0;
+        else if (otpStatus === 'miss')       needBecauseScenario = 1;
+        else if (otpStatus === 'notUsed')    needBecauseScenario = 0; // block in guard
+      }
+
+      const needForOneMiss = (baseMisses === 1) ? 1 : 0; // still respect 1 base miss rule
       additionalRequired = Math.max(needBecauseScenario, needForOneMiss);
     }
 
-    return {
-      method, ivrUnverified, securityAvailable, securityMiss, misses, details,
-      vmScenarioActive, stdScenarioActive, addlSelected, additionalRequired,
-      otpStatus, fraudNeedsAddl
-    };
-  }
+        return {
+          method, ivrUnverified, securityAvailable, securityMiss, misses, details,
+          vmScenarioActive, stdScenarioActive, baseMisses, addlCorrect, addlIncorrect, additionalRequired,
+          otpStatus, fraudNeedsAddl
+        };
+      }
 
   function refreshUI(){
     const method = currentMethod();
@@ -452,13 +510,19 @@
         )
       ) ||
       (
-        // NEW: If IVR is Unverified, require explicit choices for Account and SSN
+        // If IVR is Unverified, require explicit choices for Account and SSN
         ivr.value === 'unverified' &&
         (
           document.querySelector('#acct').value === 'unknown' ||
           document.querySelector('#ssn4').value === 'unknown'
         )
-      ); // NEW
+      ) ||
+      (
+        // NEW: Voice Match + scenario requires an OTP attempt first
+        currentMethod() === 'voiceMatch' &&
+        ctx.vmScenarioActive &&
+        otp.value === 'notUsed'
+      );
 
     if (needMore){
       statusPill.className = 'pill more';
@@ -496,8 +560,19 @@
 
     // Immediate fails
     if (ctx.securityMiss){ lines.push('Security code mismatch ⇒ <b>automatic fail</b>.'); }
-    if (ctx.misses >= 2){ lines.push('Two or more misses among account number / last 4 of SSN / OTP ⇒ <b>automatic fail</b>.'); }
-    if (ctx.method === 'standard' && otp.value === 'miss' && manual.value === 'no'){ lines.push('OTP missed and no manual alternative used ⇒ counts as <b>two misses</b> (fail).'); }
+    if (ctx.misses >= 2){  lines.push('Two or more total misses ⇒ <b>automatic fail</b>.'); }
+
+    // Standard notes
+    if (ctx.method === 'standard'){
+      if (ctx.stdScenarioActive){ lines.push('Standard scenario selected ⇒ need <b>one (1) Additional Verifier</b>.'); }
+      if (ctx.baseMisses === 1){  lines.push('Exactly one base miss (acct/SSN/OTP) ⇒ need <b>one (1) Additional Verifier</b>.'); }
+
+      // remaining uses addlCorrect
+      if (ctx.additionalRequired > 0){
+        const remaining = Math.max(0, ctx.additionalRequired - ctx.addlCorrect);
+        if (remaining > 0){ lines.push(`You still need <b>${remaining}</b> Additional Verifier(s).`); }
+      }
+    }
 
     // Requirements
     if (!ctx.securityMiss && ctx.misses < 2){
@@ -511,22 +586,25 @@
           lines.push('Step 5 override: even with one miss, total requirement remains <b>one (1)</b> Additional Verifier due to fraud.');
         }
         if (ctx.additionalRequired > 0){
-          const remaining = Math.max(0, ctx.additionalRequired - ctx.addlSelected);
+          const remaining = Math.max(0, ctx.additionalRequired - ctx.addlCorrect);
           if (remaining > 0){ lines.push(`You still need <b>${remaining}</b> Additional Verifier(s).`); }
         }
       } else {
         if (ctx.vmScenarioActive){
           if (ctx.otpStatus === 'verified'){
             lines.push('Voice Match scenario covered with <b>OTP verified</b>.');
-          } else {
-            lines.push('Voice Match scenario selected ⇒ need <b>OTP</b> <i>or</i> <b>one (1) Additional Verifier</b>.');
-            const remaining = Math.max(0, ctx.additionalRequired - ctx.addlSelected);
+          } else if (ctx.otpStatus === 'miss'){
+            lines.push('Voice Match scenario: OTP missed ⇒ need <b>one (1) Additional Verifier</b>.');
+            const remaining = Math.max(0, ctx.additionalRequired - ctx.addlCorrect);
             if (remaining > 0){ lines.push(`You still need <b>${remaining}</b> Additional Verifier.`); }
+          } else if (ctx.otpStatus === 'notUsed'){
+            lines.push('Voice Match scenario: <b>OTP is required first</b>. Please attempt OTP.');
           }
         }
-        if (ctx.misses === 1){ lines.push('Exactly one miss detected ⇒ may be replaced by <b>one (1) Additional Verifier</b>.'); }
       }
     }
+
+    lines.push(`<span class="muted">Base misses: ${ctx.baseMisses} | Incorrect AV: ${ctx.addlIncorrect} | Total: ${ctx.misses}</span>`);
 
     // Status pill
     let state = 'more';
@@ -539,12 +617,14 @@
       let pass = false;
       if (ctx.method === 'standard'){
         // Must satisfy additional requirement count
-        pass = (ctx.additionalRequired === 0) || (ctx.addlSelected >= ctx.additionalRequired);
+        pass = (ctx.additionalRequired === 0) || (ctx.addlCorrect >= ctx.additionalRequired);
       } else {
-        // Voice Match: if scenario active, either OTP verified or additionalSelected>=1; plus handle one-miss rule if applicable
-        const scenarioSatisfied = (!ctx.vmScenarioActive) || (ctx.otpStatus === 'verified') || (ctx.addlSelected >= 1);
-        const oneMissSatisfied = (ctx.misses === 0) || (ctx.addlSelected >= 1) || (ctx.otpStatus === 'verified');
-        pass = scenarioSatisfied && oneMissSatisfied;
+        // Voice Match pass logic (OTP-first):
+        // If VM scenario active:
+        // - OTP verified => additionalRequired from scenario is 0
+        // - OTP missed   => additionalRequired is 1 (needs one correct AV)
+        // - OTP not used => guarded above to stay in NEED INPUT
+        pass = (ctx.additionalRequired === 0) || (ctx.addlCorrect >= ctx.additionalRequired);
       }
 
       if (pass){ state = 'pass'; label = 'VERIFICATION PASSED'; }
@@ -561,7 +641,7 @@
   [...methodRadios, ivr, secAvail, secMatch, otp, manual, fraudFlag].forEach(el=>{
     el.addEventListener('change', refreshUI);
   });
-  $$('#acct, #ssn4, .vmScenario, .stdScenario, .addl').forEach(el=>{
+  $$('#acct, #ssn4, .vmScenario, .stdScenario, .addlChoice').forEach(el=>{
     el.addEventListener('change', refreshUI);
   });
 
@@ -586,6 +666,9 @@
     // Keep your existing fraud resets
     if (typeof fraudFlag !== 'undefined' && fraudFlag) fraudFlag.value = 'no';
     if (typeof fraudRow  !== 'undefined' && fraudRow)  fraudRow.style.display = (secAvail.value !== 'yes') ? '' : 'none';
+
+    // Reset all Additional Verifier results to "Not used"
+    $$('.addlChoice').forEach(s => s.value = 'unused');
 
     refreshUI();
   });
