@@ -378,15 +378,20 @@
     let additionalRequired = 0;
     if (method === 'standard'){
       // Base components
-      const needForScenario = stdScenarioActive ? 1 : 0;   // long list item(s)
-      const needForOneMiss = (misses === 1) ? 1 : 0;       // exactly one miss among acct/SSN/OTP
+      let needForScenario = stdScenarioActive ? 1 : 0;    // long-list scenario(s)
+      let needForMiss     = (misses === 1) ? 1 : 0;       // exactly one miss among acct/SSN/OTP
+      let needForFraud    = fraudNeedsAddl ? 1 : 0;       // fraud alert + no security code
 
-      if (fraudNeedsAddl){
-        // Step 5: Fraud alert/ID theft + no security code => exactly ONE Additional Verifier total
-        additionalRequired = 1;
+      // SPECIAL RULE (Step 5): If fraud + one miss are both present, they count as ONE total.
+      // We "collapse" the pair into a single slot, then add any scenario separately.
+      if (needForFraud && needForMiss){
+        const combinedMissFraud = 1;   // collapsed pair
+        needForFraud = 0;              // consumed by collapse
+        needForMiss  = 0;              // consumed by collapse
+        additionalRequired = Math.min(2, combinedMissFraud + needForScenario);
       } else {
-        // Normal rule: miss + (regular) scenario can total up to 2
-        additionalRequired = Math.min(2, needForOneMiss + needForScenario);
+        // Normal sum with cap 2 (e.g., fraud + scenario = 2; miss + scenario = 2; fraud alone = 1)
+        additionalRequired = Math.min(2, needForScenario + needForMiss + needForFraud);
       }
     } else {
       // Voice Match: unchanged
